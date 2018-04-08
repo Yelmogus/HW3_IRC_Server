@@ -358,14 +358,14 @@ void* handle_requests(void* args){
                     send(mUser->getSD(), errChannelName.c_str(), errChannelName.size(), 0);
                 }
                 else{
-                    std::map<std::string, Channel>::iterator channel_it = AllChannel.find(channelName);
-                    if(channel_it == AllChannel.end()){
+                    std::map<std::string, Channel>::iterator channel_it = AllChannels.find(channelName);
+                    if(channel_it == AllChannels.end()){
                         customMsg = "No channel found with name: " + channelName + "\n";
                         send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
                     }
                     else{
-                        channel_it->second.removeUser(mUser);
-                        std::set<> mUser->getChannelsMemberOf();
+                        channel_it->second.removeUser(*mUser);
+                        std::set<Channel> mChannelUser = mUser->getChannelsMemberOf();
                     }
                 }
             }
@@ -431,7 +431,10 @@ void* handle_requests(void* args){
 
                 //Message channel
                 else{
+<<<<<<< HEAD
                     
+=======
+>>>>>>> d5f994edfc38fe06ad82b0b0dd588cdb2a055620
                     customMsg = channelName + "> " + mUser->getName() + ": " + msg +  "\n";
                     send_all(channelName, customMsg, mUser);
                 }
