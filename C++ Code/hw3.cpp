@@ -184,7 +184,7 @@ int recv_wrapper(int client_sd, char* buffer, int buffer_size, int flags){
     int bytes_recv = recv(client_sd, buffer, buffer_size, flags);
     if(bytes_recv < 0){
         perror("recv()");
-        exit(-1);
+        return -1;
     }
     else if (bytes_recv == 0){
         close(client_sd);
@@ -378,6 +378,18 @@ void* handle_requests(void* args){
                     customMsg = "No channel found with name: " + channelName + "\n";
                     send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
                 }
+                std::set<Channel> memberChannels = mUser->getChannelsMemberOf();
+                std::set<Channel>::iterator memberOf = memberChannels.find(channelName);
+
+                for (memberOf = memberChannels.begin(); memberOf != memberChannels.end(); memberOf++)
+                {
+                    std::cout << memberOf->getName() << std::endl;
+                }
+                if (memberOf == memberChannels.end()){
+                    customMsg = "You are not part of channel " + channelName + ". Please use JOIN command." + "\n";
+                    send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                }
+
                 else{
                     std::set<UserInfo> users = msgChannel->second.getUserList();
                     std::set<UserInfo>::const_iterator channelUser = users.begin();
@@ -415,6 +427,7 @@ void* handle_requests(void* args){
                 channel_it->second.removeUser(*mUser);
             }
             close(mUser->getSD());
+            return NULL;
         }
         else{
             send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
@@ -447,17 +460,11 @@ int main(int argc, char** kargs){
         int client_len = sizeof( client );
         mUser->setOpStatus(false);
 
-<<<<<<< HEAD
-        printf("SERVER: Waiting connections\n");
-        mUser.setSD(accept(server_socket, (struct sockaddr*) &client, (socklen_t*) &client_len)) ;
-        printf( "SERVER: Accepted connection from %s on SockDescriptor %d\n", inet_ntoa(client.sin_addr), mUser.getSD());
-        pthread_create(&tid[current_users], NULL, &handle_requests, &mUser);
-=======
+
         printf( "SERVER: Waiting connections\n" );
         mUser->setSD(accept(server_socket, (struct sockaddr*) &client, (socklen_t*) &client_len)) ;
         printf( "SERVER: Accepted connection from %s on SockDescriptor %d\n", inet_ntoa(client.sin_addr), mUser->getSD());
         pthread_create(&tid[current_users], NULL, &handle_requests, mUser);
->>>>>>> 5ee6d8e37958fea1a74774b0e441dfb62b6a75fb
         std::cout << "Created thread: " << tid[current_users] << std::endl;
         current_users++; //increment user count by one
     }
