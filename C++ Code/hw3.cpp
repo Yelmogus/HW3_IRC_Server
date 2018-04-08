@@ -27,7 +27,6 @@ class UserInfo;
 std::map<std::string, Channel> AllChannels;
 std::map<std::string, UserInfo> AllUsers;
 
-
 //GLOBAL CONSTANTS
 //Can be replaced with "^[a-z]\w{0,19}"
 std::regex regexString("^[a-z][_0-9a-z]{1,19}$", std::regex_constants::icase);
@@ -253,7 +252,6 @@ void* handle_requests(void* args){
             if(incomingMsg.size() == cmd::LIST.size()){ 
                 customMsg = "There are currently " + std::to_string(AllChannels.size()) + " channels\n";
                 send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
-                std::cout << "Thread " << pthread_self() << ": " << "Sent to " << mUser->getSD() << " " << mUser->getName() << std::endl;
                 for(std::map<std::string,Channel>::iterator it = AllChannels.begin();
                     it != AllChannels.end(); it++){
                     send(mUser->getSD(), it->first.c_str(), it->first.size(), 0);
@@ -263,7 +261,6 @@ void* handle_requests(void* args){
             //LIST command with an arugment 
             else{
                 std::string channelName = incomingMsg.substr(command.size()+1);
-
                 //Check arguement validity 
                 if (channelName[0] != '#' ||  !regex_match(channelName.substr(1), regexString)){
                     send(mUser->getSD(), errChannelName.c_str(), errChannelName.size(), 0);
@@ -313,6 +310,8 @@ void* handle_requests(void* args){
                     else{
                         it->second.addUser(*mUser);
                     }
+                    
+                    
                 }
             }
         }
@@ -403,7 +402,6 @@ void* handle_requests(void* args){
                     send(msgUser->second.getSD(), customMsg.c_str(), customMsg.size(), 0);
                 }
             }
-
         }
 
         //QUIT COMMAND = QUIT
@@ -414,6 +412,7 @@ void* handle_requests(void* args){
                 std::map<std::string, Channel>::iterator channel_it = AllChannels.find(it->getName());
                 channel_it->second.removeUser(*mUser);
             }
+            close(mUser->getSD());
         }
         else{
             send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
@@ -441,15 +440,15 @@ int main(int argc, char** kargs){
             max_users *= 2;
             tid = (pthread_t*) realloc(tid, max_users);
         }
-        UserInfo mUser;
+        UserInfo* mUser = new UserInfo();
         struct sockaddr_in client;
         int client_len = sizeof( client );
-        mUser.setOpStatus(false);
+        mUser->setOpStatus(false);
 
         printf( "SERVER: Waiting connections\n" );
-        mUser.setSD(accept(server_socket, (struct sockaddr*) &client, (socklen_t*) &client_len)) ;
-        printf( "SERVER: Accepted connection from %s on SockDescriptor %d\n", inet_ntoa(client.sin_addr), mUser.getSD());
-        pthread_create(&tid[current_users], NULL, &handle_requests, &mUser);
+        mUser->setSD(accept(server_socket, (struct sockaddr*) &client, (socklen_t*) &client_len)) ;
+        printf( "SERVER: Accepted connection from %s on SockDescriptor %d\n", inet_ntoa(client.sin_addr), mUser->getSD());
+        pthread_create(&tid[current_users], NULL, &handle_requests, mUser);
         std::cout << "Created thread: " << tid[current_users] << std::endl;
         current_users++; //increment user count by one
     }
