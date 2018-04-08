@@ -40,6 +40,7 @@ std::string errUserID = "Invalid command, please identify yourself with USER.\n"
 std::string errUserName = "Invalid Username: Please identify yourself with 20 alphanumerica characters\n";
 std::string errAlreadyReg = "Invalid use of USER, you already have a name:\n";
 std::string errChannelName = "Invalid ChannelName must start with '#' and be alphanumerical\n";
+std::string removedFromChannel = "You have been removed from all the channels\n";
 
 //Constant command variables
 class cmd{
@@ -64,11 +65,14 @@ public:
 
 class UserInfo{
 public:
-    std::string& const getName() const {return name_;}
-    int getSD() const {return client_sd_;}
-    std::set<Channel>& getChannelsMemberOf() const {return channelmember_;}
-    bool getOpStatus() const {return isOperator_;}
 
+    //Getters Returns a const reference to the private member variables
+    const std::string& getName() const {return name_;}
+    const int getSD() const {return client_sd_;}
+    const std::set<Channel>& getChannelsMemberOf() const {return channelmember_;}
+    const bool getOpStatus() const {return isOperator_;}
+
+    //Setters modifiers the private member variables
     void addChannel(Channel& newChannel) {channelmember_.insert(newChannel);}
     void setName(std::string& name) {name_ = name;}
     void setSD(int SD) {client_sd_ = SD;}
@@ -86,8 +90,12 @@ private:
 
 class Channel{
 public:
-    std::string getName() const {return name_;}
-    std::set<UserInfo>& getUserList() const {return userList_;}
+
+    //Getters for the Channel object private member variable
+    const std::string& getName() const {return name_;}
+    const std::set<UserInfo>& getUserList() {return userList_;}
+    
+    //Setters that modifiers the channels private member variable
     void addUser(UserInfo& newUser){userList_.insert(newUser);}
     void removeUser(UserInfo& removeUser){
         std::set<UserInfo>::iterator it = userList_.find(removeUser);
@@ -100,6 +108,7 @@ public:
         return this->name_.compare(otherChannel.name_);
     }
 
+    //Constructor for the channel object
     Channel(std::string& name){
         userList_ = std::set<UserInfo>();
         name_ = name;
@@ -310,7 +319,7 @@ void* handle_requests(void* args){
                     //Channel was found add user to channel
                     else{
                         mChannel->second.addUser(*mUser);
-                        mUser->addChannel(mChannel);
+                        mUser->addChannel(mChannel->second);
                         customMsg = "You've joined " + channelName + "\n";
                         send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
                     }
@@ -328,18 +337,23 @@ void* handle_requests(void* args){
                     std::map<std::string, Channel>::iterator channel_it = AllChannels.find(it->getName());
                     channel_it->second.removeUser(*mUser);
                 }
-
-                customMsg = "You have been removed from all the channels\n";
-                send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                send(mUser->getSD(), removedFromChannel.c_str(), removedFromChannel.size(), 0);
             }
             else{
-
                 std::string channelName = incomingMsg.substr(cmd::PART.size()+1);
                 if(channelName[0] != '#' || !regex_match(channelName.substr(1), regexString)){
                     send(mUser->getSD(), errChannelName.c_str(), errChannelName.size(), 0);
                 }
                 else{
-
+                    std::map<std::string, Channel>::iterator channel_it = AllChannel.find(channelName);
+                    if(channel_it == AllChannel.end()){
+                        customMsg = "No channel found with name: " + channelName + "\n";
+                        send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                    }
+                    else{
+                        channel_it->second.removeUser(mUser);
+                        std::set<> mUser->getChannelsMemberOf();
+                    }
                 }
             }
         }
@@ -363,9 +377,9 @@ void* handle_requests(void* args){
                 std::string channel = channel_user.substr(0, space_pos);
                 std::string user = channel_user.substr(space_pos);
 
-                std::map<std::string, UserInfo>::iterator removeUser = AllUsers.find(user);
+                std::map<std::string, UserInfo>::iterator removemUser = AllUsers.find(user);
                 std::map<std::string, Channel>::iterator removeChannel = AllChannels.find(channel);
-                removeChannel->second.removeUser(removeUser->second);
+                removeChannel->second.removeUser(removemUser->second);
             }
             else{
                 send(mUser->getSD(), errNotOperator.c_str(), errNotOperator.size(), 0);
@@ -387,7 +401,7 @@ void* handle_requests(void* args){
                 }
                 else{
                     std::set<UserInfo> users = msgChannel->second.getUserList();
-                    std::set<UserInfo>::const_iterator channelUser = users.begin();
+                    std::set<UserInfo>::iterator channelUser = users.begin();
                     customMsg = channelName + "> " + mUser->getName() + ": " + msg +  "\n";
                     while (channelUser != users.end()){
                         send(channelUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
