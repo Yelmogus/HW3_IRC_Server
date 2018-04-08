@@ -64,10 +64,10 @@ public:
 
 class UserInfo{
 public:
-    std::string getName() const {return name_;}
+    std::string& const getName() const {return name_;}
     int getSD() const {return client_sd_;}
-    std::set<Channel>& getChannelsMemberOf() {return channelmember_;}
-    bool getOpStatus() {return isOperator_;}
+    std::set<Channel>& getChannelsMemberOf() const {return channelmember_;}
+    bool getOpStatus() const {return isOperator_;}
 
     void addChannel(Channel& newChannel) {channelmember_.insert(newChannel);}
     void setName(std::string& name) {name_ = name;}
@@ -77,8 +77,6 @@ public:
     bool operator<(const UserInfo& otherUser) const{
         return this->name_.compare(otherUser.name_); 
     }
-
-
 private:
     std::string name_;
     int client_sd_;
@@ -89,7 +87,7 @@ private:
 class Channel{
 public:
     std::string getName() const {return name_;}
-    std::set<UserInfo>& getUserList() {return userList_;}
+    std::set<UserInfo>& getUserList() const {return userList_;}
     void addUser(UserInfo& newUser){userList_.insert(newUser);}
     void removeUser(UserInfo& removeUser){
         std::set<UserInfo>::iterator it = userList_.find(removeUser);
@@ -297,21 +295,25 @@ void* handle_requests(void* args){
                     send(mUser->getSD(), errChannelName.c_str(), errChannelName.size(), 0);
                 }
                 else{
-                    std::map<std::string,Channel>::iterator it;
-                    it = AllChannels.find(channelName);
+                    std::map<std::string,Channel>::iterator mChannel;
+                    mChannel = AllChannels.find(channelName);
                      //Channel Doesnt exist make one
-                    if(it == AllChannels.end()){ 
+                    if(mChannel == AllChannels.end()){ 
                         Channel newChannel = Channel(channelName);
                         newChannel.addUser(*mUser);
                         AllChannels.insert(std::make_pair(channelName, newChannel));
                         mUser->addChannel(newChannel);
+
+                        customMsg = "You've created a new channel " + channelName + " and joined\n";
+                        send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
                     }
                     //Channel was found add user to channel
                     else{
-                        it->second.addUser(*mUser);
+                        mChannel->second.addUser(*mUser);
+                        mUser->addChannel(mChannel);
+                        customMsg = "You've joined " + channelName + "\n";
+                        send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
                     }
-                    
-                    
                 }
             }
         }
@@ -319,14 +321,19 @@ void* handle_requests(void* args){
         //PART COMMAND - PART [#channel]
         //Remove user from specific channel if there is one or remove them from all channels
         else if(command == cmd::PART){
+            //Remove user from all the channles if it is a member of that channel
             if(incomingMsg.size() == cmd::PART.size()){
                 std::set<Channel> userChannels = mUser->getChannelsMemberOf();
                 for(std::set<Channel>::iterator it = userChannels.begin(); it != userChannels.end(); it++){
                     std::map<std::string, Channel>::iterator channel_it = AllChannels.find(it->getName());
                     channel_it->second.removeUser(*mUser);
                 }
+
+                customMsg = "You have been removed from all the channels\n";
+                send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
             }
             else{
+
                 std::string channelName = incomingMsg.substr(cmd::PART.size()+1);
                 if(channelName[0] != '#' || !regex_match(channelName.substr(1), regexString)){
                     send(mUser->getSD(), errChannelName.c_str(), errChannelName.size(), 0);
@@ -438,8 +445,6 @@ void* handle_requests(void* args){
     return NULL;
 }
 
-
-
 int main(int argc, char** kargs){
     //Parses command line agruments 
     setUpServerPassword(argc, kargs);
@@ -449,7 +454,6 @@ int main(int argc, char** kargs){
     int max_users = 10;
     pthread_t* tid = (pthread_t*) calloc(max_users, sizeof(pthread_t));
 
-    
     while(1){
         if(current_users >= max_users){
             max_users *= 2;
@@ -460,7 +464,10 @@ int main(int argc, char** kargs){
         int client_len = sizeof( client );
         mUser->setOpStatus(false);
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 18056ddc097c569993ed4ffe65a33642dddcd868
         printf( "SERVER: Waiting connections\n" );
         mUser->setSD(accept(server_socket, (struct sockaddr*) &client, (socklen_t*) &client_len)) ;
         printf( "SERVER: Accepted connection from %s on SockDescriptor %d\n", inet_ntoa(client.sin_addr), mUser->getSD());
