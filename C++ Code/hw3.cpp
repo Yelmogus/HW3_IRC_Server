@@ -334,7 +334,7 @@ void* handle_requests(void* args){
         //the command line
         else if(command == cmd::OPERATOR){
             std::string attempt = incomingMsg.substr(cmd::OPERATOR.size() + 1);
-            if(password == attempt){
+            if(strcmp(password, attempt) != NULL{
                 mUser->setOpStatus(true);
             }
         }
