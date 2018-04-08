@@ -316,6 +316,7 @@ void* handle_requests(void* args){
                 send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
                 for(std::map<std::string,Channel>::iterator it = AllChannels.begin();
                     it != AllChannels.end(); it++){
+                    send(mUser->getSD(), "* ", 2, 0);
                     send(mUser->getSD(), it->first.c_str(), it->first.size(), 0);
                     send(mUser->getSD(), "\n", 1, 0);
                 }
@@ -337,8 +338,14 @@ void* handle_requests(void* args){
                     }
                     else{
                         std::set<UserInfo> channelUsers = it->second.getUserList();
-                        customMsg = "There are currently " + std::to_string(channelUsers.size()) + " members\n";
+                        customMsg = "There are currently " + std::to_string(channelUsers.size()) + " members\n" + channelName + " members: ";
                         send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                        for(std::set<UserInfo>::iterator channel_it = channelUsers.begin();
+                            channel_it != channelUsers.end(); channel_it++){
+                            send(mUser->getSD(), channel_it->getName().c_str(), channel_it->getName().size(), 0);
+                            send(mUser->getSD(), " ", 1, 0);
+                        }
+                        send(mUser->getSD(), "\n", 1, 0);
                     }
                 }
             }
@@ -462,56 +469,73 @@ void* handle_requests(void* args){
         //PRIVMSG COMMAND = PRIVMSG (<#Channel> | <user>) <message>
         //Sends a message to named channel or named user at most 512 characters
         else if(command == cmd::PRIVMSG){
-            
-            //PRIVMSG command for a channel
-            if (incomingMsg.substr(command.size() + 1, 1) == "#"){
-                std::string channelName = incomingMsg.substr(command.size()+1, incomingMsg.find(' ', command.size()+1) - command.size() - 1);
-                printf("%s %lu\n", channelName.c_str(), channelName.size());
-                std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + channelName.size()));
-                std::map<std::string,Channel>::iterator msgChannel;
-                msgChannel = AllChannels.find(channelName);
-                //Check to see if channel exists
-                if(msgChannel == AllChannels.end()){ 
-                    customMsg = "No channel found with name: " + channelName + "\n";
-                    send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
-                }
-
-                std::set<Channel> memberChannels = mUser->getChannelsMemberOf();
-                std::set<Channel>::iterator memberOf = memberChannels.find(channelName);
-
-                for (memberOf = memberChannels.begin(); memberOf != memberChannels.end(); memberOf++)
-                {
-                    std::cout << memberOf->getName() << std::endl;
-                }
-                //Check to see if user is member of channel
-                if (memberOf == memberChannels.end()){
-                    customMsg = "You are not part of channel " + channelName + ". Please use JOIN command." + "\n";
-                    send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
-                }
-
-                //Message channel
-                else{
-                    customMsg = channelName + "> " + mUser->getName() + ": " + msg +  "\n";
-                    send_all(channelName, customMsg, mUser);
-                }
+            size_t space_pos = incomingMsg.find(' ');
+            if (space_pos == std::string::npos){
+                send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
             }
-
-            //PRIVMSG command for a user
+            //PRIVMSG command for a channel
             else{
-                std::string userName = incomingMsg.substr(command.size()+1, incomingMsg.find(' ', command.size()+1) - command.size() - 1);
-                printf("%s %lu\n", userName.c_str(), userName.size());
-                std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + userName.size()));
-                std::map<std::string,UserInfo>::iterator msgUser;
-                msgUser = AllUsers.find(userName);
-                //Check to see if user exists
-                if(msgUser == AllUsers.end()){ 
-                    customMsg = "No user found with name: " + userName + "\n";
-                    send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                if (incomingMsg.substr(command.size() + 1, 1) == "#"){
+                    std::string channelName = incomingMsg.substr(command.size()+1, incomingMsg.find(' ', command.size()+1) - command.size() - 1);
+
+                    size_t space_pos = incomingMsg.find(' ', command.size()+1);
+                    if (space_pos == std::string::npos){
+                        send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
+                    }
+                    else{                
+                        std::map<std::string,Channel>::iterator msgChannel;
+                        msgChannel = AllChannels.find(channelName);
+                        //Check to see if channel exists
+                        if(msgChannel == AllChannels.end()){ 
+                            customMsg = "No channel found with name: " + channelName + "\n";
+                            send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                        }
+
+                        else{
+                            std::set<Channel> memberChannels = mUser->getChannelsMemberOf();
+                            std::set<Channel>::iterator memberOf = memberChannels.find(channelName);
+                            //Check to see if user is member of channel
+                            if (memberOf == memberChannels.end()){
+                                customMsg = "You are not part of channel " + channelName + ". Please use JOIN command." + "\n";
+                                send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                            }
+                            //Message channel
+                            else{
+                                std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + channelName.size()));
+                                customMsg = channelName + "> " + mUser->getName() + ": " + msg +  "\n";
+                                send_all(channelName, customMsg, mUser);
+                            }
+                        }
+                    }
                 }
-                //Message the user
+
+                //PRIVMSG command for a user
                 else{
-                    customMsg = mUser->getName() + "> " + msg +  "\n";
-                    send(msgUser->second.getSD(), customMsg.c_str(), customMsg.size(), 0);
+                    space_pos = incomingMsg.find(' ', command.size()+1);
+                    if (space_pos == std::string::npos){
+                        send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
+                    }
+                    else{
+                        std::string userName = incomingMsg.substr(command.size()+1, incomingMsg.find(' ', command.size()+1) - command.size() - 1);
+                        std::map<std::string,UserInfo>::iterator msgUser;
+                        msgUser = AllUsers.find(userName);
+                        //Check to see if user exists
+                        if(msgUser == AllUsers.end()){ 
+                            customMsg = "No user found with name: " + userName + "\n";
+                            send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                        }
+
+                        space_pos = incomingMsg.find(' ', command.size()+1 + userName.size());
+                        if (space_pos == std::string::npos){
+                            send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
+                        }    
+                        //Message the user
+                        else{
+                            std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + userName.size()));
+                            customMsg = mUser->getName() + "> " + msg +  "\n";
+                            send(msgUser->second.getSD(), customMsg.c_str(), customMsg.size(), 0);
+                        }
+                    }
                 }
             }
         }
