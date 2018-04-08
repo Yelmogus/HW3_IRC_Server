@@ -129,7 +129,7 @@ int setUpServerSocket(){
         exit(-1);
     }
 
-    if (setsockopt(server_socket, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&off, sizeof(off))){
+    if (setsockopt(server_socket, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&off, sizeof(off))){
      	perror("setsockopt(IPV6_V6ONLY) failed");
      	exit(-1);
   	}
@@ -369,7 +369,8 @@ void* handle_requests(void* args){
         //Sends a message to named channel or named user at most 512 characters
         else if(command == cmd::PRIVMSG){
             if (incomingMsg.substr(command.size() + 1, 1) == "#"){
-                std::string channelName = incomingMsg.substr(command.size()+1, incomingMsg.find(' ', command.size()+1) - command.size() + 1);
+                std::string channelName = incomingMsg.substr(command.size()+1, incomingMsg.find(' ', command.size()+1) - command.size() - 1);
+                printf("%s %lu\n", channelName.c_str(), channelName.size());
                 std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + channelName.size()));
                 std::map<std::string,Channel>::iterator msgChannel;
                 msgChannel = AllChannels.find(channelName);
@@ -380,7 +381,7 @@ void* handle_requests(void* args){
                 else{
                     std::set<UserInfo> users = msgChannel->second.getUserList();
                     std::set<UserInfo>::const_iterator channelUser = users.begin();
-                    customMsg = "#" + channelName + "> " + mUser->getName() + ": " + msg +  "\n";
+                    customMsg = channelName + "> " + mUser->getName() + ": " + msg +  "\n";
                     while (channelUser != users.end()){
                         send(channelUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
                         channelUser++;
@@ -389,7 +390,8 @@ void* handle_requests(void* args){
             }
 
             else{
-                std::string userName = incomingMsg.substr(command.size()+1, incomingMsg.find(' ', command.size()+1) - command.size() + 1);
+                std::string userName = incomingMsg.substr(command.size()+1, incomingMsg.find(' ', command.size()+1) - command.size() - 1);
+                printf("%s %lu\n", userName.c_str(), userName.size());
                 std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + userName.size()));
                 std::map<std::string,UserInfo>::iterator msgUser;
                 msgUser = AllUsers.find(userName);
@@ -445,10 +447,17 @@ int main(int argc, char** kargs){
         int client_len = sizeof( client );
         mUser->setOpStatus(false);
 
+<<<<<<< HEAD
+        printf("SERVER: Waiting connections\n");
+        mUser.setSD(accept(server_socket, (struct sockaddr*) &client, (socklen_t*) &client_len)) ;
+        printf( "SERVER: Accepted connection from %s on SockDescriptor %d\n", inet_ntoa(client.sin_addr), mUser.getSD());
+        pthread_create(&tid[current_users], NULL, &handle_requests, &mUser);
+=======
         printf( "SERVER: Waiting connections\n" );
         mUser->setSD(accept(server_socket, (struct sockaddr*) &client, (socklen_t*) &client_len)) ;
         printf( "SERVER: Accepted connection from %s on SockDescriptor %d\n", inet_ntoa(client.sin_addr), mUser->getSD());
         pthread_create(&tid[current_users], NULL, &handle_requests, mUser);
+>>>>>>> 5ee6d8e37958fea1a74774b0e441dfb62b6a75fb
         std::cout << "Created thread: " << tid[current_users] << std::endl;
         current_users++; //increment user count by one
     }
