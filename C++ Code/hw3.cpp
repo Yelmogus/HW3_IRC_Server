@@ -1,16 +1,16 @@
 #include <string>
 #include <iostream>
-#include <sys/wait.h>
-#include <sys/types.h>
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <pthread.h>
 #include <getopt.h>
 #include <regex>
 #include <vector>
@@ -66,7 +66,7 @@ public:
 class UserInfo{
 public:
     std::string getName() const {return name_;}
-    int getSD() {return client_sd_;}
+    int getSD() const {return client_sd_;}
     std::set<Channel>& getChannelsMemberOf() {return channelmember_;}
     bool getOpStatus() {return isOperator_;}
 
@@ -114,19 +114,26 @@ private:
 
 int setUpServerSocket(){
 	//Set up Server Socket
-    struct sockaddr_in server;
+    struct sockaddr_in6 server;
     int server_socket;
+    int off = 0; 
     socklen_t sockaddr_len = sizeof(server);
     memset(&server, 0, sockaddr_len);
 
     //Set type of socket and which port is allowed
-    server.sin_addr.s_addr = htonl(INADDR_ANY);
-    server.sin_port = htons(0);
-    server.sin_family = PF_INET;
-    if((server_socket = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+    server.sin6_addr = in6addr_any;
+    server.sin6_flowinfo = 0;
+    server.sin6_port = htons(0);
+    server.sin6_family = AF_INET6;
+    if((server_socket = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
         perror("socket");
         exit(-1);
     }
+
+    if (setsockopt(server_socket, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&off, sizeof(off))){
+     	perror("setsockopt(IPV6_V6ONLY) failed");
+     	exit(-1);
+  	}
 
     //Bind the socket
     if(bind(server_socket, (struct sockaddr *)&server, sockaddr_len) < 0) {
@@ -142,7 +149,7 @@ int setUpServerSocket(){
 
     //Prints the port number to console
     getsockname(server_socket, (struct sockaddr *)&server, &sockaddr_len);
-    printf("Server listening on port: %d\n", ntohs(server.sin_port));
+    printf("Server listening on port: %d\n", ntohs(server.sin6_port));
     return server_socket;
 }
 
@@ -192,7 +199,8 @@ int recv_wrapper(int client_sd, char* buffer, int buffer_size, int flags){
 void* handle_requests(void* args){
 
     pthread_detach(pthread_self());
-    UserInfo* mUser = (UserInfo*) args;
+    UserInfo *mUser = (UserInfo*) args;
+    printf("%d\n",mUser->getSD());
     std::vector<char> buffer(BUFLEN);
     std::string incomingMsg;
     std::string customMsg;
@@ -245,6 +253,7 @@ void* handle_requests(void* args){
             if(incomingMsg.size() == cmd::LIST.size()){ 
                 customMsg = "There are currently " + std::to_string(AllChannels.size()) + " channels\n";
                 send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                std::cout << "Thread " << pthread_self() << ": " << "Sent to " << mUser->getSD() << " " << mUser->getName() << std::endl;
                 for(std::map<std::string,Channel>::iterator it = AllChannels.begin();
                     it != AllChannels.end(); it++){
                     send(mUser->getSD(), it->first.c_str(), it->first.size(), 0);
@@ -334,7 +343,7 @@ void* handle_requests(void* args){
         //the command line
         else if(command == cmd::OPERATOR){
             std::string attempt = incomingMsg.substr(cmd::OPERATOR.size() + 1);
-            if(strcmp(password, attempt) != NULL{
+            if(password == attempt){
                 mUser->setOpStatus(true);
             }
         }
@@ -360,6 +369,41 @@ void* handle_requests(void* args){
         //PRIVMSG COMMAND = PRIVMSG (<#Channel> | <user>) <message>
         //Sends a message to named channel or named user at most 512 characters
         else if(command == cmd::PRIVMSG){
+            if (incomingMsg.substr(command.size() + 1, 1) == "#"){
+                std::string channelName = incomingMsg.substr(command.size()+1, incomingMsg.find(' ', command.size()+1) - command.size() + 1);
+                std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + channelName.size()));
+                std::map<std::string,Channel>::iterator msgChannel;
+                msgChannel = AllChannels.find(channelName);
+                if(msgChannel == AllChannels.end()){ 
+                    customMsg = "No channel found with name: " + channelName + "\n";
+                    send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                }
+                else{
+                    std::set<UserInfo> users = msgChannel->second.getUserList();
+                    std::set<UserInfo>::const_iterator channelUser = users.begin();
+                    customMsg = "#" + channelName + "> " + mUser->getName() + ": " + msg +  "\n";
+                    while (channelUser != users.end()){
+                        send(channelUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                        channelUser++;
+                    }
+                }
+            }
+
+            else{
+                std::string userName = incomingMsg.substr(command.size()+1, incomingMsg.find(' ', command.size()+1) - command.size() + 1);
+                std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + userName.size()));
+                std::map<std::string,UserInfo>::iterator msgUser;
+                msgUser = AllUsers.find(userName);
+                if(msgUser == AllUsers.end()){ 
+                    customMsg = "No user found with name: " + userName + "\n";
+                    send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                }
+                else{
+                    customMsg = mUser->getName() + "> " + msg +  "\n";
+                    send(msgUser->second.getSD(), customMsg.c_str(), customMsg.size(), 0);
+                }
+            }
+
         }
 
         //QUIT COMMAND = QUIT
@@ -406,6 +450,7 @@ int main(int argc, char** kargs){
         mUser.setSD(accept(server_socket, (struct sockaddr*) &client, (socklen_t*) &client_len)) ;
         printf( "SERVER: Accepted connection from %s on SockDescriptor %d\n", inet_ntoa(client.sin_addr), mUser.getSD());
         pthread_create(&tid[current_users], NULL, &handle_requests, &mUser);
+        std::cout << "Created thread: " << tid[current_users] << std::endl;
         current_users++; //increment user count by one
     }
 }
