@@ -194,6 +194,19 @@ int recv_wrapper(int client_sd, char* buffer, int buffer_size, int flags){
     }
 }
 
+void send_all(std::string channelName, std::string msg, UserInfo *mUser){
+    std::map<std::string,Channel>::iterator msgChannel;
+    msgChannel = AllChannels.find(channelName);
+
+    std::set<UserInfo> users = msgChannel->second.getUserList();
+    std::set<UserInfo>::const_iterator channelUser = users.begin();
+    while (channelUser != users.end()){
+        send(channelUser->getSD(), msg.c_str(), msg.size(), 0);
+        channelUser++;
+    }
+
+}
+
 void* handle_requests(void* args){
 
     pthread_detach(pthread_self());
@@ -389,6 +402,7 @@ void* handle_requests(void* args){
                     customMsg = "No channel found with name: " + channelName + "\n";
                     send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
                 }
+
                 std::set<Channel> memberChannels = mUser->getChannelsMemberOf();
                 std::set<Channel>::iterator memberOf = memberChannels.find(channelName);
 
@@ -404,13 +418,8 @@ void* handle_requests(void* args){
 
                 //Message channel
                 else{
-                    std::set<UserInfo> users = msgChannel->second.getUserList();
-                    std::set<UserInfo>::const_iterator channelUser = users.begin();
                     customMsg = channelName + "> " + mUser->getName() + ": " + msg +  "\n";
-                    while (channelUser != users.end()){
-                        send(channelUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
-                        channelUser++;
-                    }
+                    send_all(channelName, customMsg, mUser);
                 }
             }
 
