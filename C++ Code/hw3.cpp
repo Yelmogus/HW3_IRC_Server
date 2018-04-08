@@ -34,8 +34,9 @@ std::string password = "password";
 
 //GLOBAL ERROR MESSAGES - CONSTANTS
 std::string mCommand = "Enter Command=> \n";
-std::string errCommand = "Command not recongized or missing arguments: Availalbe Commands: [USER, LIST, JOIN, PART, OPERATOR, KICK, PRIVMSG, QUIT]\n";
+std::string errCommand = "Command not recongized or missing arguments\nAvailalbe Commands:\n\tUSER<name>\n\tLIST[#channel]\n\tJOIN<#channel>\n\tPART[#channel]\n\tOPERATOR<password>\n\tKICK<#channel><user>\n\tPRIVMSG ( <#channel> | <user> ) <message>\n\tQUIT\n";
 std::string errNotOperator = "User is not an operator, use OPERATOR <password> to elavate status\n";
+std::string errWrongPass = "Incorrect Password\n";
 std::string errUserID = "Invalid command, please identify yourself with USER.\n";
 std::string errUserName = "Invalid Username: Please identify yourself with 20 alphanumerica characters\n";
 std::string errAlreadyReg = "Invalid use of USER, you already have a name:\n";
@@ -116,6 +117,48 @@ private:
     std::string name_;
     std::set<UserInfo> userList_;
 };
+
+bool checkUserExists(UserInfo& mUser){
+    return AllUsers.find(mUser.getName()) != AllUsers.end();
+}
+bool checkUserExists(std::string& mUser){
+    return AllUsers.find(mUser) != AllUsers.end();
+}
+bool checkChannelExists(Channel& mChannel){
+    return AllChannels.find(mChannel.getName())!= AllChannels.end();
+}
+bool checkChannelExists(std::string& mChannel){
+    return AllChannels.find(mChannel) != AllChannels.end();
+}
+
+bool checkUserinChannel(UserInfo& mUser, Channel& mChannel){
+    if(mChannel.getUserList().find(mUser) != mChannel.getUserList().end() && 
+        mUser.getChannelsMemberOf().find(mChannel) != mUser.getChannelsMemberOf().end()){
+        return true;
+    }
+    else{
+        return false;
+    }
+}
+
+bool checkUserinChannel(std::string& mUser, std::string& mChannel){
+    std::map<std::string, UserInfo>::iterator mUserInfo_it = AllUsers.find(mUser);
+    std::map<std::string, Channel>::iterator mChannel_it = AllChannels.find(mChannel);
+    if(mChannel_it == AllChannels.end() || mUserInfo_it == AllUsers.end()){
+        return false;
+    }
+    else{
+        Channel mChannel = mChannel_it->second;
+        UserInfo mUser = mUserInfo_it->second;
+        if (mChannel.getUserList().find(mUser) != mChannel.getUserList().end() && 
+            mUser.getChannelsMemberOf().find(mChannel) != mUser.getChannelsMemberOf().end()){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+}
 
 int setUpServerSocket(){
 	//Set up Server Socket
@@ -219,7 +262,6 @@ void* handle_requests(void* args){
 
     pthread_detach(pthread_self());
     UserInfo *mUser = (UserInfo*) args;
-    printf("%d\n",mUser->getSD());
     std::vector<char> buffer(BUFLEN);
     std::string incomingMsg;
     std::string customMsg;
@@ -313,7 +355,7 @@ void* handle_requests(void* args){
             else{
                 //Check arguement validity
                 std::string channelName = incomingMsg.substr(cmd::JOIN.size()+1);
-                if(channelName.empty() || channelName[0] != '#'){ 
+                if(channelName.empty() || channelName[0] != '#' || !regex_match(channelName.substr(1), regexString)){ 
                     send(mUser->getSD(), errChannelName.c_str(), errChannelName.size(), 0);
                 }
                 else{
@@ -353,19 +395,27 @@ void* handle_requests(void* args){
                 send(mUser->getSD(), removedFromChannel.c_str(), removedFromChannel.size(), 0);
             }
             else{
+                //Remove user from the specified channel if they are part of it and its a correct name
                 std::string channelName = incomingMsg.substr(cmd::PART.size()+1);
                 if(channelName[0] != '#' || !regex_match(channelName.substr(1), regexString)){
                     send(mUser->getSD(), errChannelName.c_str(), errChannelName.size(), 0);
                 }
                 else{
                     std::map<std::string, Channel>::iterator channel_it = AllChannels.find(channelName);
+                    std::set<Channel>::iterator userChannel = mUser->getChannelsMemberOf().find(channelName);
                     if(channel_it == AllChannels.end()){
                         customMsg = "No channel found with name: " + channelName + "\n";
+                        send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                    }
+                    else if(userChannel == mUser->getChannelsMemberOf().end()){
+                        customMsg = "You are not part of channel " + channelName + ". Please use JOIN command." + "\n";
                         send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
                     }
                     else{
                         channel_it->second.removeUser(*mUser);
                         std::set<Channel> mChannelUser = mUser->getChannelsMemberOf();
+                        customMsg = "You've been removed from: " + channelName + "\n";
+                        send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
                     }
                 }
             }
@@ -379,6 +429,9 @@ void* handle_requests(void* args){
             if(password == attempt){
                 mUser->setOpStatus(true);
             }
+            else{
+                send(mUser->getSD(), errWrongPass.c_str(), errWrongPass.size(), 0);
+            }
         }
 
         //KICK COMMAND = KICK <#channel> <user>
@@ -387,12 +440,19 @@ void* handle_requests(void* args){
             if(mUser->getOpStatus()){
                 std::string channel_user = incomingMsg.substr(command.size()+1);
                 size_t space_pos = channel_user.find(' ');
-                std::string channel = channel_user.substr(0, space_pos);
-                std::string user = channel_user.substr(space_pos);
-
-                std::map<std::string, UserInfo>::iterator removemUser = AllUsers.find(user);
-                std::map<std::string, Channel>::iterator removeChannel = AllChannels.find(channel);
-                removeChannel->second.removeUser(removemUser->second);
+                if(space_pos == std::string::npos){
+                    send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
+                }
+                else{
+                    std::string ChannelName = channel_user.substr(0, space_pos);
+                    std::string Username = channel_user.substr(space_pos);
+                    if(checkUserinChannel(Username, ChannelName)){
+                        removeChannel->second.removeUser(removemUser->second);
+                    }
+                    else{
+                        send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
+                    }
+                }
             }
             else{
                 send(mUser->getSD(), errNotOperator.c_str(), errNotOperator.size(), 0);
