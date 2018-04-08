@@ -1,16 +1,16 @@
 #include <string>
 #include <iostream>
+#include <sys/wait.h>
+#include <sys/types.h>
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 #include <getopt.h>
 #include <regex>
 #include <vector>
@@ -334,7 +334,7 @@ void* handle_requests(void* args){
         //the command line
         else if(command == cmd::OPERATOR){
             std::string attempt = incomingMsg.substr(cmd::OPERATOR.size() + 1);
-            if(password == attempt){
+            if(strcmp(password, attempt) != NULL{
                 mUser->setOpStatus(true);
             }
         }
