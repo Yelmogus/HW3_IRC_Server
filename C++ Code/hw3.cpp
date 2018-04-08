@@ -431,11 +431,7 @@ void* handle_requests(void* args){
 
                 //Message channel
                 else{
-<<<<<<< HEAD
-                    std::set<UserInfo> users = msgChannel->second.getUserList();
-                    std::set<UserInfo>::iterator channelUser = users.begin();
-=======
->>>>>>> 9d4c1438209e37f84b73ca715b7b483287723083
+                    
                     customMsg = channelName + "> " + mUser->getName() + ": " + msg +  "\n";
                     send_all(channelName, customMsg, mUser);
                 }
