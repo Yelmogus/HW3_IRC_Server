@@ -16,11 +16,8 @@
 #include <vector>
 #include <set>
 #include <map>
+#include "IRCServerClasses.hpp"
 #define BUFLEN 256
-
-//FORWARD DECLARATIONS
-class Channel;
-class UserInfo;
 
 //GLOBAL VARIABLES
 //READ AND WRITES MUST BE SYNCHRONIZED
@@ -42,94 +39,6 @@ std::string errUserName = "Invalid Username: Please identify yourself with 20 al
 std::string errAlreadyReg = "Invalid use of USER, you already have a name:\n";
 std::string errChannelName = "Invalid ChannelName must start with '#' and be alphanumerical\n";
 std::string removedFromChannel = "You have been removed from all the channels\n";
-
-//Constant command variables
-class cmd{
-public:
-    static const std::string USER;
-    static const std::string LIST;
-    static const std::string JOIN;
-    static const std::string PART;
-    static const std::string OPERATOR;
-    static const std::string KICK;
-    static const std::string PRIVMSG;
-    static const std::string QUIT;
-};
-    const std::string cmd::USER = "USER";
-    const std::string cmd::LIST = "LIST";
-    const std::string cmd::JOIN = "JOIN";
-    const std::string cmd::PART = "PART";
-    const std::string cmd::OPERATOR = "OPERATOR";
-    const std::string cmd::KICK = "KICK";
-    const std::string cmd::PRIVMSG = "PRIVMSG";
-    const std::string cmd::QUIT = "QUIT";
-
-class UserInfo{
-public:
-    //Getters Returns a const reference to the private member variables
-    const std::string& getName() const {return name_;}
-    const int getSD() const {return client_sd_;}
-    const std::set<Channel>& getChannelsMemberOf() const {return channelmember_;}
-    const bool getOpStatus() const {return isOperator_;}
-
-    //Setters modifiers the private member variables
-    void addChannel(Channel& newChannel) {channelmember_.insert(newChannel);}
-    void removeChannel(Channel& removeChannel){
-        std::set<Channel>::iterator it = channelmember_.find(removeChannel);
-        if(it != channelmember_.end()){
-            channelmember_.erase(it);
-        }
-    }
-    void setName(std::string& name) {name_ = name;}
-    void setSD(int SD) {client_sd_ = SD;}
-    void setOpStatus(bool flag){isOperator_ = flag;}
-
-    bool operator<(const UserInfo& otherUser) const{
-        return this->name_.compare(otherUser.name_); 
-    }
-private:
-    std::string name_;
-    int client_sd_;
-    std::set<Channel> channelmember_;
-    bool isOperator_;
-};
-
-class Channel{
-public:
-
-    //Getters for the Channel object private member variable
-    const std::string& getName() const {return name_;}
-    const std::set<UserInfo>& getUserList() {return userList_;}
-    
-    //Setters that modifiers the channels private member variable
-    void addUser(UserInfo& newUser){userList_.insert(newUser);}
-    void removeUser(UserInfo& removeUser){
-        for (std::set<UserInfo>::iterator it = userList_.begin(); it != userList_.end(); it++){
-            if (!strcmp(it->getName().c_str(), removeUser.getName().c_str())){
-                userList_.erase(it);
-                printf("%s removed\n", removeUser.getName().c_str());
-                return;
-            }
-        }
-        /*std::set<UserInfo>::iterator it = userList_.find(removeUser); 
-        if(it != userList_.end()){
-            userList_.erase(it);
-            printf("USER removed\n");
-        }*/
-    }
-
-    bool operator<(const Channel& otherChannel) const{
-        return this->name_.compare(otherChannel.name_);
-    }
-    //Constructor for the channel object
-    Channel(std::string& name){
-        userList_ = std::set<UserInfo>();
-        name_ = name;
-    }
-private:
-    std::string name_;
-    std::set<UserInfo> userList_;
-};
 
 bool checkUserExists(UserInfo& mUser){
     return AllUsers.find(mUser.getName()) != AllUsers.end();
@@ -261,18 +170,15 @@ int recv_wrapper(int client_sd, char* buffer, int buffer_size, int flags){
 void send_all(std::string channelName, std::string msg, UserInfo *mUser){
     std::map<std::string,Channel>::iterator msgChannel;
     msgChannel = AllChannels.find(channelName);
-
     std::set<UserInfo> users = msgChannel->second.getUserList();
     std::set<UserInfo>::const_iterator channelUser = users.begin();
     while (channelUser != users.end()){
         send(channelUser->getSD(), msg.c_str(), msg.size(), 0);
         channelUser++;
     }
-
 }
 
 void* handle_requests(void* args){
-
     pthread_detach(pthread_self());
     UserInfo *mUser = (UserInfo*) args;
     std::vector<char> buffer(BUFLEN);
@@ -488,8 +394,8 @@ void* handle_requests(void* args){
                     if(checkUserinChannel(Username, ChannelName)){
                         std::map<std::string, Channel>::iterator channel_it = AllChannels.find(ChannelName);
                         std::map<std::string, UserInfo>::iterator user_it = AllUsers.find(ChannelName);
-                        channel_it->second->removeUser(user_it->second);
-                        user_it->second->removeChannel(channel_it->second);
+                        channel_it->second.removeUser(user_it->second);
+                        user_it->second.removeChannel(channel_it->second);
                     }
                     else{
                         send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);

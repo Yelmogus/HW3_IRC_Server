@@ -1,6 +1,6 @@
 CC = g++
 CFLAGS = -Wall -Werror -pthread 
-OBJ = hw3.cpp
+OBJ = hw3.cpp IRCServerClasses.cpp
 
 #This is the rule to make object files by compile them with their respective *.c file
 #Only useful if you have multiple object files to compile.
