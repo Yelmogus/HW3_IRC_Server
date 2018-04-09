@@ -37,6 +37,7 @@ std::string mCommand = "Enter Command=> \n";
 std::string errCommand = "Command not recongized or missing arguments\nAvailable Commands:\n\tUSER <name>\n\tLIST [#channel]\n\tJOIN <#channel>\n\tPART [#channel]\n\tOPERATOR <password>\n\tKICK <#channel> <user>\n\tPRIVMSG ( <#channel> | <user> ) <message>\n\tQUIT\n";
 std::string errNotOperator = "User is not an operator, use OPERATOR <password> to elavate status\n";
 std::string errWrongPass = "Incorrect Password\n";
+std::string rightPass = "OPERATOR status bestowed\n";
 std::string errUserID = "Invalid command, please identify yourself with USER.\n";
 std::string errUserName = "Invalid Username: Please identify yourself with 20 alphanumerica characters\n";
 std::string errAlreadyReg = "Invalid use of USER, you already have a name:\n";
@@ -407,10 +408,12 @@ void* handle_requests(void* args){
                     }
                     //Channel was found add user to channel
                     else{
-                        mChannel->second.addUser(*mUser);
-                        mUser->addChannel(mChannel->second);
                         customMsg = "You've joined " + channelName + "\n";
                         send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                        customMsg = channelName + "> " + mUser->getName() + "joined the channel.\n";
+                        send_all(channelName, customMsg, mUser);
+                        mChannel->second.addUser(*mUser);
+                        mUser->addChannel(mChannel->second);
                     }
                 }
             }
@@ -465,6 +468,7 @@ void* handle_requests(void* args){
             std::string attempt = incomingMsg.substr(cmd::OPERATOR.size() + 1);
             if(password == attempt){
                 mUser->setOpStatus(true);
+                send(mUser->getSD(), rightPass.c_str(), rightPass.size(), 0);
             }
             else{
                 send(mUser->getSD(), errWrongPass.c_str(), errWrongPass.size(), 0);
@@ -486,8 +490,10 @@ void* handle_requests(void* args){
                     if(checkUserinChannel(Username, ChannelName)){
                         std::map<std::string, Channel>::iterator channel_it = AllChannels.find(ChannelName);
                         std::map<std::string, UserInfo>::iterator user_it = AllUsers.find(ChannelName);
-                        channel_it->second->removeUser(user_it->second);
-                        user_it->second->removeChannel(channel_it->second);
+                        channel_it->second.removeUser(user_it->second);
+                        user_it->second.removeChannel(channel_it->second);
+                        customMsg = ChannelName + "> " + Username +  " has been kicked from the channel.\n";
+                        send_all(ChannelName, customMsg, mUser);
                     }
                     else{
                         send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
