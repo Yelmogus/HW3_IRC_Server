@@ -425,6 +425,7 @@ void* handle_requests(void* args){
                     }
                     else{
                         channel_it->second.removeUser(*mUser);
+                        mUser->removeChannel(channel_it->second);
                         std::set<Channel> mChannelUser = mUser->getChannelsMemberOf();
                         customMsg = "You've been removed from: " + channelName + "\n";
                         send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
