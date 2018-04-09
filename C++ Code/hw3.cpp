@@ -135,7 +135,11 @@ void setUpServerPassword(int argc, char** kargs){
 
         if (c == -1){break;}
         else if(c == 'o'){
-            password = optarg;
+            if( regex_match(optarg, regexString) ){
+                password = optarg;
+            }else{
+                password = "password";
+            }
         }
     }
     std::cout << "Password for OPERATOR CMD is: " << password << std::endl;
