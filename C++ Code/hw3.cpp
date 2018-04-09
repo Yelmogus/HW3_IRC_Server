@@ -34,7 +34,7 @@ std::string password = "password";
 
 //GLOBAL ERROR MESSAGES - CONSTANTS
 std::string mCommand = "Enter Command=> \n";
-std::string errCommand = "Command not recongized or missing arguments\nAvailalbe Commands:\n\tUSER<name>\n\tLIST[#channel]\n\tJOIN<#channel>\n\tPART[#channel]\n\tOPERATOR<password>\n\tKICK<#channel><user>\n\tPRIVMSG ( <#channel> | <user> ) <message>\n\tQUIT\n";
+std::string errCommand = "Command not recongized or missing arguments\nAvailable Commands:\n\tUSER <name>\n\tLIST [#channel]\n\tJOIN <#channel>\n\tPART [#channel]\n\tOPERATOR <password>\n\tKICK <#channel> <user>\n\tPRIVMSG ( <#channel> | <user> ) <message>\n\tQUIT\n";
 std::string errNotOperator = "User is not an operator, use OPERATOR <password> to elavate status\n";
 std::string errWrongPass = "Incorrect Password\n";
 std::string errUserID = "Invalid command, please identify yourself with USER.\n";
@@ -104,10 +104,18 @@ public:
     //Setters that modifiers the channels private member variable
     void addUser(UserInfo& newUser){userList_.insert(newUser);}
     void removeUser(UserInfo& removeUser){
-        std::set<UserInfo>::iterator it = userList_.find(removeUser);
+        for (std::set<UserInfo>::iterator it = userList_.begin(); it != userList_.end(); it++){
+            if (!strcmp(it->getName().c_str(), removeUser.getName().c_str())){
+                userList_.erase(it);
+                printf("%s removed\n", removeUser.getName().c_str());
+                return;
+            }
+        }
+        /*std::set<UserInfo>::iterator it = userList_.find(removeUser); 
         if(it != userList_.end()){
             userList_.erase(it);
-        }
+            printf("USER removed\n");
+        }*/
     }
 
     bool operator<(const Channel& otherChannel) const{
@@ -276,22 +284,36 @@ void* handle_requests(void* args){
     incomingMsg.append(buffer.cbegin(), buffer.cend());
 
     //Ask for user id first before anything else if cannot supply ID or wrong command quit imediately 
-    if(incomingMsg.find(cmd::USER) == std::string::npos || incomingMsg.size() < 6){
+    if (incomingMsg.find(cmd::USER) == std::string::npos || incomingMsg.size() < 6){
         send(mUser->getSD(), errUserID.c_str(), errUserID.size(), 0);
         close(mUser->getSD());
         return NULL;
     }
     //First command is USER check if username is correct
     else{
+        while (incomingMsg.substr(4, 1) != " "){
+            send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
+            incomingMsg.clear();
+            bytes_recv = recv_wrapper(mUser->getSD(), &buffer[0], BUFLEN, 0);
+            incomingMsg.append(buffer.cbegin(), buffer.cbegin() + bytes_recv - 1);
+            if (incomingMsg.find(cmd::USER) == std::string::npos || incomingMsg.size() < 6){
+                send(mUser->getSD(), errUserID.c_str(), errUserID.size(), 0);
+                close(mUser->getSD());
+                return NULL;
+            }
+        }
         //Points to begining after "USER" keyword 5, is the first character after USER and 6 is the length of User_\n (6)
         std::string userName = incomingMsg.substr(cmd::USER.size() + 1, bytes_recv - cmd::USER.size() - 2);
-        if(std::regex_match(userName, regexString)){ //USER name is correct
+        std::map<std::string,UserInfo>::iterator exists;
+        exists = AllUsers.find(userName);
+
+        if(exists == AllUsers.end() && std::regex_match(userName, regexString)){ //USER name is correct
             customMsg = "Welcome, " + userName + "\n";
             send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
             mUser->setName(userName);
             AllUsers.insert(  std::make_pair(userName, *mUser)  );
         }
-        else{ //User name is incorrect
+        else{ //User name is incorrect or already exists
             send(mUser->getSD(), errUserName.c_str(), errUserName.size(), 0);
             close(mUser->getSD());
             return NULL;
@@ -403,6 +425,8 @@ void* handle_requests(void* args){
                 for(std::set<Channel>::iterator it = userChannels.begin(); it != userChannels.end(); it++){
                     std::map<std::string, Channel>::iterator channel_it = AllChannels.find(it->getName());
                     channel_it->second.removeUser(*mUser);
+                    customMsg = channel_it->first + "> " + mUser->getName() + " left the channel.\n";
+                    send_all(channel_it->first, customMsg, mUser);
                 }
                 send(mUser->getSD(), removedFromChannel.c_str(), removedFromChannel.size(), 0);
             }
@@ -429,6 +453,8 @@ void* handle_requests(void* args){
                         std::set<Channel> mChannelUser = mUser->getChannelsMemberOf();
                         customMsg = "You've been removed from: " + channelName + "\n";
                         send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
+                        customMsg = channel_it->first + "> " + mUser->getName() + " left the channel.\n";
+                        send_all(channel_it->first, customMsg, mUser);
                     }
                 }
             }
@@ -510,7 +536,7 @@ void* handle_requests(void* args){
                             }
                             //Message channel
                             else{
-                                std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + channelName.size()));
+                                std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + channelName.size()), incomingMsg.find(' ', command.size()+1 + channelName.size()) + 512);
                                 customMsg = channelName + "> " + mUser->getName() + ": " + msg +  "\n";
                                 send_all(channelName, customMsg, mUser);
                             }
@@ -540,7 +566,7 @@ void* handle_requests(void* args){
                         }    
                         //Message the user
                         else{
-                            std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + userName.size()));
+                            std::string msg = incomingMsg.substr(incomingMsg.find(' ', command.size()+1 + userName.size()),incomingMsg.find(' ', command.size()+1 + userName.size()) + 512);
                             customMsg = mUser->getName() + "> " + msg +  "\n";
                             send(msgUser->second.getSD(), customMsg.c_str(), customMsg.size(), 0);
                         }
