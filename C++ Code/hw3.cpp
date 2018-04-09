@@ -134,11 +134,14 @@ void setUpServerPassword(int argc, char** kargs){
         int option_index = 0;
         int c = getopt_long(argc, kargs, "o:", long_opts, &option_index);
 
-        if (c == -1){break;}
+        if (c == -1){
+            break;
+        }
         else if(c == 'o'){
             if( regex_match(optarg, regexString) ){
                 password = optarg;
-            }else{
+            }
+            else{
                 password = "password";
             }
         }
@@ -215,9 +218,7 @@ void* handle_requests(void* args){
         }
         //Points to begining after "USER" keyword 5, is the first character after USER and 6 is the length of User_\n (6)
         std::string userName = incomingMsg.substr(cmd::USER.size() + 1, bytes_recv - cmd::USER.size() - 2);
-        std::map<std::string,UserInfo>::iterator exists;
-        exists = AllUsers.find(userName);
-
+        std::map<std::string,UserInfo>::iterator exists = AllUsers.find(userName);
         if(exists == AllUsers.end() && std::regex_match(userName, regexString)){ //USER name is correct
             customMsg = "Welcome, " + userName + "\n";
             send(mUser->getSD(), customMsg.c_str(), customMsg.size(), 0);
