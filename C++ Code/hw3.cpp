@@ -74,6 +74,12 @@ public:
 
     //Setters modifiers the private member variables
     void addChannel(Channel& newChannel) {channelmember_.insert(newChannel);}
+    void removeChannel(Channel& removeChannel){
+        std::set<Channel>::iterator it = channelmember_.find(removeChannel);
+        if(it != channelmember_.end()){
+            channelmember_.erase(it);
+        }
+    }
     void setName(std::string& name) {name_ = name;}
     void setSD(int SD) {client_sd_ = SD;}
     void setOpStatus(bool flag){isOperator_ = flag;}
@@ -115,7 +121,6 @@ public:
     bool operator<(const Channel& otherChannel) const{
         return this->name_.compare(otherChannel.name_);
     }
-
     //Constructor for the channel object
     Channel(std::string& name){
         userList_ = std::set<UserInfo>();
@@ -478,12 +483,15 @@ void* handle_requests(void* args){
                 else{
                     std::string ChannelName = channel_user.substr(0, space_pos);
                     std::string Username = channel_user.substr(space_pos);
-                    /*if(checkUserinChannel(Username, ChannelName)){
-                        removeChannel->second.removeUser(removemUser->second);
+                    if(checkUserinChannel(Username, ChannelName)){
+                        std::map<std::string, Channel>::iterator channel_it = AllChannels.find(ChannelName);
+                        std::map<std::string, UserInfo>::iterator user_it = AllUsers.find(ChannelName);
+                        channel_it->second->removeUser(user_it->second);
+                        user_it->second->removeChannel(channel_it->second);
                     }
                     else{
                         send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
-                    }*/
+                    }
                 }
             }
             else{
@@ -579,7 +587,6 @@ void* handle_requests(void* args){
         else{
             send(mUser->getSD(), errCommand.c_str(), errCommand.size(), 0);
         }
-
     }while(bytes_recv > 0);
 
     return NULL;
